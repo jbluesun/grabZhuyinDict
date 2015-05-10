@@ -105,6 +105,7 @@ def GetWordsForZhuyin(strZhuyin, cookies, vocabulary):
     bNextPage = True
     uKey = ""
     serial = ""
+    nWord = len(vocabulary)
 
     h = httplib2.Http()
 
@@ -123,7 +124,7 @@ def GetWordsForZhuyin(strZhuyin, cookies, vocabulary):
         bNextPage, uKey, serial = ParsePage(searchPage, vocabulary, recNo)
         recNo += 100
     
-    return cookies
+    return (cookies, len(vocabulary)-nWord)
 
 if __name__ == '__main__':
 
@@ -147,7 +148,13 @@ if __name__ == '__main__':
 
     for strZhuyin in fZhuyinList:
         strZhuyin = strZhuyin.strip("\n \t")
-        cookies = GetWordsForZhuyin(strZhuyin, cookies, vocabulary)
+        cookies,numAdded = GetWordsForZhuyin(strZhuyin, cookies, vocabulary)
+        #可能因为数据量太大，服务器不返回结果，可以通过指定声调来减少结果数量
+        if(numAdded == 0):
+            cookies, numAdded = GetWordsForZhuyin(strZhuyin+u"ˊ".encode('Big5'), cookies, vocabulary)
+            cookies, numAdded = GetWordsForZhuyin(strZhuyin+u"ˇ".encode('Big5'), cookies, vocabulary)
+            cookies, numAdded = GetWordsForZhuyin(strZhuyin+u"ˋ".encode('Big5'), cookies, vocabulary)
+            cookies, numAdded = GetWordsForZhuyin(u"˙".encode('Big5')+strZhuyin, cookies, vocabulary)
     
     fZhuyinList.close();
 
