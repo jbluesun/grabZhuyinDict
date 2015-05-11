@@ -7,7 +7,7 @@ from optparse import OptionParser
 import httplib2
 import HTMLParser
 import codecs
-
+import sys
 
 def GetFirstPageUrl(strZhuyin):
     urlSearch = "http://dict.revised.moe.edu.tw/cgi-bin/newDict/dict.sh?idx=dict.idx"
@@ -42,16 +42,25 @@ def AddToVocabulary(word, zhuyins, vocabulary):
         vocabulary[word] = zhuyins
     return
 
+def printAlertContent(searchPage):
+    alertPos = searchPage.rfind('alert(\"')
+    if(alertPos == -1):
+        print 'ERROR: no result but no alert'
+    alertStr = searchPage[alertPos+len('alert(\"'):]
+    alertStr = alertStr[:alertStr.find('\')')]
+    print "ERROR: no result: " + alertStr.decode('big5')
+    return
+
 def ParsePage(searchPage, vocabulary, recNo):
     soup = BeautifulSoup(searchPage)    #, fromEncoding="big5"
     num = soup.find('p', attrs={'class':'lable'})
     if(num == None): 
-        print "ERROR:no result number found"
-        return (False, "", "")
+        printAlertContent(searchPage)
+        return (False, "", "", False)
     numText = num.string.strip()
     if(len(numText) == 0 or numText.find(u'找到') == -1):
-        print "ERROR:no result number found"
-        return (False, "", "")
+        printAlertContent(searchPage)
+        return (False, "", "", False)
     if(recNo == 0):
         print numText
     #找到下一页
@@ -61,21 +70,21 @@ def ParsePage(searchPage, vocabulary, recNo):
     uKeyObj = soup.find("input", attrs={"name":"ukey"})
     if(uKeyObj == None):
         print "ERROR: no ukey found"
-        return (False, "", "")
+        return (False, "", "", False)
     uKey = uKeyObj['value']
     
     #找到serial
     serialObj = soup.find("input", attrs={"name":"serial"})
     if(serialObj == None):
         print "ERROR: no serial found"
-        return (False, uKey, "")
+        return (False, uKey, "", False)
     serial = serialObj['value']
     
     #找到词条table
     wordTable = num.findNextSibling('table')
     if (wordTable == None):
         print "ERROR: no table after result number"
-        return (False, uKey, serial)
+        return (False, uKey, serial, False)
 
     h = HTMLParser.HTMLParser()
 
@@ -95,7 +104,7 @@ def ParsePage(searchPage, vocabulary, recNo):
                         , h.unescape(zhuyins).strip()
                         , vocabulary)
     print lastNumber
-    return (nextPage != None, uKey, serial)
+    return (nextPage != None, uKey, serial, True)
     
 
 def GetWordsForZhuyin(strZhuyin, cookies, vocabulary):
@@ -103,13 +112,13 @@ def GetWordsForZhuyin(strZhuyin, cookies, vocabulary):
     
     recNo = 0
     bNextPage = True
+    bResultFound = True
     uKey = ""
     serial = ""
-    nWord = len(vocabulary)
 
     h = httplib2.Http()
 
-    while bNextPage:    
+    while (bNextPage and bResultFound):    
         urlSearch = GetUrlString(strZhuyin, recNo, uKey, serial)
         if(cookies != ""):
             myHeaders = {'Cookie':cookies}
@@ -121,13 +130,15 @@ def GetWordsForZhuyin(strZhuyin, cookies, vocabulary):
             thisCookies = resp['set-cookie']
             cookies = thisCookies[:thisCookies.find(";")]
 
-        bNextPage, uKey, serial = ParsePage(searchPage, vocabulary, recNo)
-        recNo += 100
+        bNextPage, uKey, serial, bResultFound = ParsePage(searchPage, vocabulary, recNo)
+        if(bResultFound):
+            recNo += 100
     
-    return (cookies, len(vocabulary)-nWord)
+    return (cookies, recNo > 0)
 
 if __name__ == '__main__':
-
+    reload(sys)
+    sys.setdefaultencoding('utf-8')
     opt = OptionParser()
     opt.add_option("-z", "--zhuyinList", dest="zhuyinList"
                    , default="", help="Zhuyin list file of Big5! encoded")
@@ -136,6 +147,7 @@ if __name__ == '__main__':
 
     (options, args) = opt.parse_args()
     if(options.zhuyinList == "" or options.outputFile == ""):
+        print "\'python grabZhuyinDict.py -help\' for help"
         exit()
 
     #"../zhuyinList.big5.txt"
@@ -148,13 +160,13 @@ if __name__ == '__main__':
 
     for strZhuyin in fZhuyinList:
         strZhuyin = strZhuyin.strip("\n \t")
-        cookies,numAdded = GetWordsForZhuyin(strZhuyin, cookies, vocabulary)
+        cookies,bResultFound = GetWordsForZhuyin(strZhuyin, cookies, vocabulary)
         #可能因为数据量太大，服务器不返回结果，可以通过指定声调来减少结果数量
-        if(numAdded == 0):
-            cookies, numAdded = GetWordsForZhuyin(strZhuyin+u"ˊ".encode('Big5'), cookies, vocabulary)
-            cookies, numAdded = GetWordsForZhuyin(strZhuyin+u"ˇ".encode('Big5'), cookies, vocabulary)
-            cookies, numAdded = GetWordsForZhuyin(strZhuyin+u"ˋ".encode('Big5'), cookies, vocabulary)
-            cookies, numAdded = GetWordsForZhuyin(u"˙".encode('Big5')+strZhuyin, cookies, vocabulary)
+        if(not bResultFound):
+            cookies, bResultFound = GetWordsForZhuyin(strZhuyin+u"ˊ".encode('Big5'), cookies, vocabulary)
+            cookies, bResultFound = GetWordsForZhuyin(strZhuyin+u"ˇ".encode('Big5'), cookies, vocabulary)
+            cookies, bResultFound = GetWordsForZhuyin(strZhuyin+u"ˋ".encode('Big5'), cookies, vocabulary)
+            cookies, bResultFound = GetWordsForZhuyin(u"˙".encode('Big5')+strZhuyin, cookies, vocabulary)
     
     fZhuyinList.close();
 
