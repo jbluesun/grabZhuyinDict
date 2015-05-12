@@ -9,27 +9,28 @@ import HTMLParser
 import codecs
 import sys
 
-def GetFirstPageUrl(strZhuyin):
+def GetFirstPageUrl(strZhuyin, category):
     urlSearch = "http://dict.revised.moe.edu.tw/cgi-bin/newDict/dict.sh?idx=dict.idx"
     urlSearch += "&cond=" + urllib2.quote(strZhuyin)
-    urlSearch += "&pieceLen=100&fld=3&cat=&imgFont=1"
+    urlSearch += "&pieceLen=100&fld=3&cat=" + category
+    urlSearch += "&imgFont=1"
     return urlSearch
 
-def GetNextPageUrl(strZhuyin, recNo, uKey, serial):
+def GetNextPageUrl(strZhuyin, recNo, uKey, serial, category):
     urlSearch = "http://dict.revised.moe.edu.tw/cgi-bin/newDict/dict.sh?"
     urlSearch += "cond=" + urllib2.quote(strZhuyin)
-    urlSearch += "&pieceLen=100&fld=3&cat="
+    urlSearch += "&pieceLen=100&fld=3&cat=" + category
     urlSearch += "&ukey=" + uKey
     urlSearch += "&serial=" + str(serial)
     urlSearch += "&recNo=" + str(recNo)
     urlSearch += "&op=l&imgFont=1"
     return urlSearch
 
-def GetUrlString(strZhuyin, recNo, uKey, serial):
+def GetUrlString(strZhuyin, recNo, uKey, serial, category):
     if recNo == 0:
-        return GetFirstPageUrl(strZhuyin)
+        return GetFirstPageUrl(strZhuyin, category)
     else:
-        return GetNextPageUrl(strZhuyin, recNo, uKey, serial)
+        return GetNextPageUrl(strZhuyin, recNo, uKey, serial, category)
 
 def AddToVocabulary(word, zhuyins, vocabulary):
     if( word in vocabulary):
@@ -48,7 +49,7 @@ def printAlertContent(searchPage):
         print 'ERROR: no result but no alert'
     alertStr = searchPage[alertPos+len('alert(\"'):]
     alertStr = alertStr[:alertStr.find('\")')]
-    print "ERROR: no result: " + alertStr.decode('big5')
+    print "ERROR: " + alertStr.decode('big5')
     return
 
 def ParsePage(searchPage, vocabulary, recNo):
@@ -92,7 +93,6 @@ def ParsePage(searchPage, vocabulary, recNo):
     for tr in trList:
         tdList = tr.findAll('td')
         if(len(tdList) != 3):continue
-        lastNumber = str(tdList[0].string)
         word    = tdList[1].findNext('a').string
         if(word == None):
             continue   #可能是含有以图片表示的汉字
@@ -103,13 +103,14 @@ def ParsePage(searchPage, vocabulary, recNo):
         AddToVocabulary(h.unescape(word).strip()
                         , h.unescape(zhuyins).strip()
                         , vocabulary)
-    print lastNumber
     return (nextPage != None, uKey, serial, True)
     
 
-def GetWordsForZhuyin(strZhuyin, cookies, vocabulary):
+def GetWordsForZhuyin(strZhuyin, cookies, vocabulary, category):
     print "getting " + strZhuyin.decode('big5'),
-    
+    if(category != "") : print "in cateory of " + str(category),
+    print "...",
+
     recNo = 0
     bNextPage = True
     bResultFound = True
@@ -119,7 +120,7 @@ def GetWordsForZhuyin(strZhuyin, cookies, vocabulary):
     h = httplib2.Http()
 
     while (bNextPage and bResultFound):    
-        urlSearch = GetUrlString(strZhuyin, recNo, uKey, serial)
+        urlSearch = GetUrlString(strZhuyin, recNo, uKey, serial, category)
         if(cookies != ""):
             myHeaders = {'Cookie':cookies}
         else:
@@ -133,7 +134,9 @@ def GetWordsForZhuyin(strZhuyin, cookies, vocabulary):
         bNextPage, uKey, serial, bResultFound = ParsePage(searchPage, vocabulary, recNo)
         if(bResultFound):
             recNo += 100
-    
+
+    if(recNo > 0):
+        print "\t Vaculary increases to " + str(len(vocabulary)) + " words"
     return (cookies, recNo > 0)
 
 if __name__ == '__main__':
@@ -157,14 +160,20 @@ if __name__ == '__main__':
 
     for strZhuyin in fZhuyinList:
         strZhuyin = strZhuyin.strip("\n \t")
-        cookies,bResultFound = GetWordsForZhuyin(strZhuyin, cookies, vocabulary)
-        #可能因为数据量太大，服务器不返回结果，可以通过指定声调来减少结果数量
+        cookies,bResultFound = GetWordsForZhuyin(strZhuyin, cookies, vocabulary, "")
+        #可能因为数据量太大，服务器不返回结果，可以通过指定声调、词汇类别来减少结果数量
         if(not bResultFound):
-            cookies, bResultFound = GetWordsForZhuyin(strZhuyin+u"ˊ".encode('Big5'), cookies, vocabulary)
-            cookies, bResultFound = GetWordsForZhuyin(strZhuyin+u"ˇ".encode('Big5'), cookies, vocabulary)
-            cookies, bResultFound = GetWordsForZhuyin(strZhuyin+u"ˋ".encode('Big5'), cookies, vocabulary)
-            cookies, bResultFound = GetWordsForZhuyin(u"˙".encode('Big5')+strZhuyin, cookies, vocabulary)
+            cookies, bResultFound = GetWordsForZhuyin(strZhuyin, cookies, vocabulary, "1000")
+            cookies, bResultFound = GetWordsForZhuyin(strZhuyin, cookies, vocabulary, "2000")
+            cookies, bResultFound = GetWordsForZhuyin(strZhuyin, cookies, vocabulary, "3000")
+            cookies, bResultFound = GetWordsForZhuyin(strZhuyin, cookies, vocabulary, "4000")
+            cookies, bResultFound = GetWordsForZhuyin(strZhuyin, cookies, vocabulary, "5000")
     
+            cookies, bResultFound = GetWordsForZhuyin(strZhuyin+u"ˊ".encode('Big5'), cookies, vocabulary, "")
+            cookies, bResultFound = GetWordsForZhuyin(strZhuyin+u"ˇ".encode('Big5'), cookies, vocabulary, "")
+            cookies, bResultFound = GetWordsForZhuyin(strZhuyin+u"ˋ".encode('Big5'), cookies, vocabulary, "")
+            cookies, bResultFound = GetWordsForZhuyin(u"˙".encode('Big5')+strZhuyin, cookies, vocabulary, "")
+
     fZhuyinList.close();
 
     #把词典内容存储到文件
