@@ -47,7 +47,7 @@ def printAlertContent(searchPage):
     if(alertPos == -1):
         print 'ERROR: no result but no alert'
     alertStr = searchPage[alertPos+len('alert(\"'):]
-    alertStr = alertStr[:alertStr.find('\')')]
+    alertStr = alertStr[:alertStr.find('\")')]
     print "ERROR: no result: " + alertStr.decode('big5')
     return
 
@@ -108,7 +108,7 @@ def ParsePage(searchPage, vocabulary, recNo):
     
 
 def GetWordsForZhuyin(strZhuyin, cookies, vocabulary):
-    print "getting " + strZhuyin.decode('big5')
+    print "getting " + strZhuyin.decode('big5'),
     
     recNo = 0
     bNextPage = True
@@ -147,13 +147,10 @@ if __name__ == '__main__':
 
     (options, args) = opt.parse_args()
     if(options.zhuyinList == "" or options.outputFile == ""):
-        print "\'python grabZhuyinDict.py -help\' for help"
+        print "\'python grabZhuyinDict.py --help\' for help"
         exit()
 
-    #"../zhuyinList.big5.txt"
-    strFileZhuyinTable = options.zhuyinList
-
-    fZhuyinList = open(strFileZhuyinTable, 'r')
+    fZhuyinList = open(options.zhuyinList, 'r')
 
     cookies = ""
     vocabulary = {}
